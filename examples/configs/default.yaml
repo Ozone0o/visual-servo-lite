@@ -1,0 +1,21 @@
+# 视觉伺服-lite 配置示例
+# 所有参数都有默认值，只需覆盖需要修改的项
+
+pan_tilt:
+  max_yaw: 90.0        # 水平最大角度（度）
+  max_pitch: 45.0      # 垂直最大角度（度）
+  min_yaw: -90.0
+  min_pitch: -45.0
+
+controller:
+  yaw_gain: 1.0         # 水平增益
+  pitch_gain: 1.0       # 垂直增益
+  dead_zone: 0.05       # 死区阈值（归一化误差）
+  ema_alpha: 0.3        # EMA 平滑系数
+  max_single_cmd_yaw: 5.0       # 单次最大 yaw 变化（度）
+  max_single_cmd_pitch: 5.0     # 单次最大 pitch 变化（度）
+  command_rate: 30.0    # 指令频率（Hz）
+
+lost:
+  short_lost_timeout: 1.0   # 短暂丢失超时（秒）
+  long_lost_timeout: 3.0    # 长时间丢失超时（秒）

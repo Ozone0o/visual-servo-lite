@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "visual-servo-lite"
+version = "0.1.0"
+description = "轻量级二维云台/机器人头视觉伺服项目"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "numpy",
+    "opencv-python-headless",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+yolo = [
+    "ultralytics",
+]
+dev = [
+    "pytest>=7.0",
+    "ruff",
+]
+
+[project.scripts]
+visual-servo-mock = "visual_servo_lite.cli:main_mock"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

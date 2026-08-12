@@ -1,0 +1,10 @@
+numpy
+opencv-python-headless
+pyyaml
+
+[dev]
+pytest>=7.0
+ruff
+
+[yolo]
+ultralytics
