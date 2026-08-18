@@ -1,212 +1,267 @@
-# visual-servo-lite
+# Luma
 
-这个项目可以让一个二维云台/机器人头根据摄像头自动跟踪目标。
+**Luma is a lightweight visual intelligence and servo control framework for robots.**
 
-核心流程：**Camera → Detector → Controller → Pan/Tilt Command**
+> Give robots eyes and motion.
 
-项目重点不是 Demo，而是提供**清晰的模块结构**和**可替换的组件**：
-- 替换检测器：`detectors/`
-- 替换控制器：`controllers/`
-- 替换机器人适配器：`adapters/`
+Luma is a research/development SDK and is not an independent robot safety
+layer. Real deployments need a device-level watchdog, validated units, and
+hardware-in-the-loop tests.
 
-不绑定任何具体机器人厂商。Webcam + Mock 即可运行。
+Luma turns any vision detector into a robot tracking system:
 
----
+```text
+Camera → Detector → Controller → Robot Adapter
+```
 
-## 安装
+It is deliberately small, modular and practical. Luma gives a robot developer
+one stable loop to build visual-servoing behaviour without coupling the vision
+model to a specific robot or transport.
+
+## Install
 
 ```bash
-# 核心依赖
-pip install -e .
+pip install luma
+```
 
-# 可选：YOLO 检测器（默认不安装）
-pip install -e ".[yolo]"
+Optional integrations are kept out of the core install:
 
-# 开发依赖
+```bash
+pip install "luma[vision]"   # OpenCV colour detector and camera support
+pip install "luma[yolo]"       # Ultralytics YOLO
+pip install "luma[apriltag]"   # pupil-apriltags
+pip install "luma[dev]"         # tests and linting
+```
+
+For local development:
+
+```bash
 pip install -e ".[dev]"
 ```
 
-## 快速开始
+## Quick start: closed-loop simulation
 
-### Mock Demo（Webcam）
-
-```bash
-python -m visual_servo_lite.cli --camera 0
-```
-
-按 `q` 或 `Ctrl+C` 退出。指标自动保存到 `output/metrics.csv`。
-
-### 使用自定义配置
+The simulation uses a synthetic camera, a colour detector, a P controller and
+a simulated pan/tilt robot. The robot applies each command to the scene, so
+the tracking error visibly decreases without a camera or hardware:
 
 ```bash
-python -m visual_servo_lite.cli --camera 0 --config examples/configs/default.yaml
+python -m luma --simulation --steps 30
 ```
 
-## ROS2 用法
+Typical output:
+
+```text
+Luma simulation
+steps: 30
+initial tracking error: 0.8746
+final tracking error:   0.0020
+converged: True
+```
+
+The same demo is available as `examples/simulation_demo.py`.
+
+## Use with a real camera
 
 ```bash
-# 编译
-cd ros2/visual_servo_lite_node
-source /opt/ros/rolling/setup.bash
-colcon build && source install/setup.bash
-
-# 运行（需要摄像头节点发布 /camera/image_raw）
-ros2 run visual_servo_lite_node visual_servo_lite_node
+luma --camera 0 --detector color --controller smooth
 ```
 
-发布的指令通过 `/pantilt_command`（Joy 消息）输出。
-
-## 配置说明
-
-所有参数在 `examples/configs/default.yaml` 中配置。
-
-### 修改增益
+The default detector looks for a red HSV region and the default adapter is a
+safe in-memory mock. Point the detector/controller at a real robot adapter in
+your application, or configure the pipeline in YAML:
 
 ```yaml
+detector:
+  name: color
+  lower_h: 0
+  upper_h: 20
+  min_area: 100
+
 controller:
-  yaw_gain: 2.0       # 增大 → 反应更激进
-  pitch_gain: 0.8     # 减小 → 垂直方向更平稳
+  name: pid
+  kp: 2.0
+  ki: 0.05
+  kd: 0.1
+  max_output: 5.0
+
+pipeline:
+  lost_timeout: 1.0
+  lost_behavior: stop       # stop or hold
+  safety_limits:
+    max_yaw: 30.0
+    max_pitch: 20.0
+    max_command_rate_hz: 30.0
+    max_frame_age: 0.5
 ```
-
-增益过大可能导致抖动，过小则跟踪迟缓。建议从 1.0 开始微调。
-
-### 修改死区
-
-```yaml
-controller:
-  dead_zone: 0.1      # 增大 → 更稳定，但中心精度降低
-```
-
-死区内不发送指令，减少云台频繁微调。
-
-### 查看实验指标
-
-退出后查看 `output/metrics.summary.txt`：
-
-```
-total_frames: 3600
-visible_frames: 3450
-lost_count: 150
-visible_ratio: 0.9583
-mean_tracking_error: 0.052341
-avg_command_rate: 29.80 Hz
-```
-
-CSV 文件 `output/metrics.csv` 包含每帧数据，可直接用 Python/Matlab 画图。
-
-## 替换组件
-
-### 替换 Detector
-
-在 `detectors/` 下新建文件，继承 `BaseDetector`：
-
-```python
-from visual_servo_lite.detectors.base import BaseDetector
-from visual_servo_lite.models import Detection
-
-class MyDetector(BaseDetector):
-    def detect(self, frame):
-        # 返回 Detection 实例
-        return Detection(target_x=..., target_y=..., visible=True, confidence=...)
-```
-
-然后在 `cli.py` 中替换：
-
-```python
-detector = MyDetector()
-```
-
-### 替换 Controller
-
-在 `controllers/` 下新建文件，继承 `BaseController`：
-
-```python
-from visual_servo_lite.controllers.base import BaseController
-from visual_servo_lite.models import Command, Detection
-
-class MyController(BaseController):
-    def compute(self, detection, last_command):
-        # 返回 Command 实例
-        return Command(yaw=..., pitch=...)
-```
-
-然后在 `cli.py` 中替换。
-
-### 连接自己的机器人
-
-**通常不需要改 Detector 和 Controller，只需要新增一个 Adapter。**
-
-在 `adapters/` 下新建文件，继承 `BaseAdapter`：
-
-```python
-from visual_servo_lite.adapters.base import BaseAdapter
-from visual_servo_lite.models import Command
-
-class MyRobotAdapter(BaseAdapter):
-    def send(self, cmd: Command) -> bool:
-        # 将 cmd.yaw, cmd.pitch 发送给你的机器人
-        return True
-```
-
-然后在 `cli.py` 中替换：
-
-```python
-adapter = MyRobotAdapter()
-```
-
-如果你通过 ROS2 通信，可以参考 `ros2/visual_servo_lite_node/` 中的 `Ros2Adapter`。
-
-## 修改核心逻辑
-
-| 文件 | 用途 |
-|------|------|
-| `detectors/` | 新增/修改检测器 |
-| `controllers/` | 新增/修改控制器 |
-| `adapters/` | 新增/修改机器人适配器 |
-| `pipeline.py` | 修改主循环逻辑 |
-| `metrics.py` | 修改指标记录 |
-| `config.py` | 修改默认配置项 |
-
-## 测试
 
 ```bash
-pytest tests/ -v
+luma --camera 0 --config examples/configs/luma.yaml \
+  --output output/metrics.csv
 ```
 
-测试覆盖：
-- 目标在中心 / 左 / 右 / 上 / 下
-- 死区行为
-- 输出限幅
-- EMA 滤波
-- 目标丢失
-- 指令安全范围
+## Architecture
 
-## 模块结构
+The public package is split by responsibility:
 
-```
-visual-servo-lite/
-├── src/visual_servo_lite/
-│   ├── models.py          # 数据模型
-│   ├── pipeline.py        # 主循环管线
-│   ├── config.py          # 配置加载
-│   ├── metrics.py         # 指标记录
-│   ├── filters.py         # 滤波工具
-│   ├── detectors/         # 检测器
-│   │   ├── base.py
-│   │   └── color.py
-│   ├── controllers/       # 控制器
-│   │   ├── base.py
-│   │   └── p_controller.py
-│   └── adapters/          # 机器人适配器
-│       ├── base.py
-│       └── mock.py
-├── ros2/                  # ROS2 包装节点
-├── examples/configs/      # 配置示例
-├── tests/                 # 单元测试
-├── pyproject.toml
-└── README.md
+```text
+luma/
+├── core/          stable Detector / Controller / RobotAdapter contracts
+│   ├── pipeline   camera → detector → controller → adapter loop
+│   └── registry   small name-based plugin registry
+├── detectors/     color, AprilTag, YOLO and CustomDetector
+├── controllers/   P, PID and SmoothController
+├── adapters/      Mock, PanTilt, ROS2 and CustomRobotAdapter
+├── metrics/       per-frame tracking metrics and CSV/JSON export
+├── camera.py      OpenCV camera source
+└── simulation.py  deterministic camera + robot plant
 ```
 
-## 开源协议
+The core data flow is intentionally explicit:
+
+```text
+Target (detector output)
+        ↓
+TrackingError (normalised x/y image error in [-1, 1])
+        ↓
+MotionCommand (yaw/pitch or linear/angular channels)
+        ↓
+RobotAdapter.send(command)
+```
+
+## Detector plugins
+
+Every detector implements one method:
+
+```python
+from luma import Target
+from luma.detectors import BaseDetector
+
+
+class BrightSpotDetector(BaseDetector):
+    def detect(self, frame) -> Target:
+        # Return pixel coordinates; Luma computes normalised error when needed.
+        return Target(x=320, y=240, confidence=1.0)
+```
+
+Built-ins:
+
+| Plugin | Use | Extra dependency |
+| --- | --- | --- |
+| `color` | deterministic HSV blob tracking | none |
+| `apriltag` | tag ID tracking | `luma[apriltag]` |
+| `yolo` | object detection boxes | `luma[yolo]` |
+| `custom` | wrap a function or detector object | none |
+
+Register an application detector by name:
+
+```python
+from luma.registry import detector_registry
+
+detector_registry.register("bright-spot", BrightSpotDetector)
+detector = detector_registry.create("bright-spot")
+```
+
+## Controllers
+
+Controllers consume `TrackingError` and return `MotionCommand`:
+
+```python
+from luma.controllers import PIDController
+from luma.models import TrackingError
+
+controller = PIDController(kp=2.0, ki=0.05, kd=0.1, max_output=5.0)
+command = controller.compute(TrackingError(x=-0.3, y=0.1), dt=1 / 30)
+```
+
+Available strategies:
+
+- `PController`: simple, predictable proportional control.
+- `PIDController`: integral and derivative terms with output and integral limits.
+- `SmoothController`: exponential smoothing around any controller.
+
+The sign convention is consistent across the SDK: a target left of centre
+produces positive yaw, which turns the view toward the target.
+
+## Robot adapters
+
+Use a mock during development:
+
+```python
+from luma.adapters import MockAdapter
+
+adapter = MockAdapter()
+adapter.send(command)
+print(adapter.last_command)
+```
+
+For hardware, choose `PanTiltAdapter` for a callable/device API,
+`ROS2Adapter` for a ROS2 `geometry_msgs/Twist` publisher, or wrap any robot SDK
+with `CustomRobotAdapter`. `ROS2Adapter` does not implicitly combine pan/tilt
+`yaw`/`pitch` with Twist angular velocities; provide an explicit
+`command_to_message` converter when using those channels and document the
+unit conversion:
+
+```python
+from luma.adapters import CustomRobotAdapter
+
+adapter = CustomRobotAdapter(lambda cmd: robot.set_pan_tilt(cmd.yaw, cmd.pitch))
+```
+
+## Build a pipeline in Python
+
+```python
+from luma import LumaPipeline
+from luma.adapters import MockAdapter
+from luma.controllers import SmoothController
+from luma.detectors import ColorDetector
+from luma.metrics import MetricsRecorder
+
+pipeline = LumaPipeline(
+    detector=ColorDetector(lower_v=50),
+    controller=SmoothController(kp=8.0, alpha=0.25, max_output=5.0),
+    adapter=MockAdapter(),
+    metrics=MetricsRecorder("output/metrics.csv"),
+)
+
+# In a camera loop:
+# result = pipeline.step_and_send(frame)
+# print(result.error.magnitude, result.command)
+```
+
+`pipeline.step(frame)` computes a command without sending it, which is useful
+for replay and testing. `pipeline.run(camera)` sends every command and yields
+the full `PipelineResult`. If the target disappears, the default safe behaviour
+is to send a zero command after `lost_timeout`; `lost_behavior="hold"` is
+available for short occlusions.
+
+Every command passes through a finite-value, pan/tilt-limit, frame-age and
+rate gate. Detector/controller exceptions and adapter rejection are converted
+to a stop attempt and recorded in command metadata. Hardware integrations
+should still provide an independent watchdog and configure limits for their
+actual actuator units.
+
+## Examples and tutorial
+
+- `examples/simulation_demo.py` — end-to-end closed-loop simulation.
+- `examples/quickstart.py` — the smallest Python pipeline.
+- `examples/demo.py` — detector/controller/adapter smoke example.
+- `examples/configs/luma.yaml` — detector/controller/pipeline configuration.
+- `tutorials/01-first-tracker.md` — build a tracker one component at a time.
+
+Run the test suite from this directory:
+
+```bash
+pytest -q
+```
+
+## Public API
+
+Luma is the only supported package and command surface. Applications should
+import `Target`, `TrackingError`, `MotionCommand`, `LumaPipeline` and
+`RobotAdapter` from `luma` and configure the runtime through the canonical
+`luma` command.
+
+## License
 
 MIT

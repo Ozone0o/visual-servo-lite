@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from visual_servo_lite.detectors.color import ColorDetector
+from luma.detectors.color import ColorDetector
 
 
 class TestColorDetector:

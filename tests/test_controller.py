@@ -4,66 +4,46 @@ from __future__ import annotations
 
 import numpy as np
 
-from visual_servo_lite.controllers.p_controller import (
-    DeadZonePController,
-    EMAFilteredPController,
-    PController,
-)
-from visual_servo_lite.detectors.color import ColorDetector
-from visual_servo_lite.models import (
-    Command,
-    ControllerConfig,
-    Detection,
-    LostConfig,
-    PanTiltConfig,
-    TargetState,
-)
-from visual_servo_lite.pipeline import ServoPipeline
-from visual_servo_lite.metrics import MetricsRecorder
-from visual_servo_lite.adapters.mock import MockPanTiltAdapter
+from luma.adapters.mock import MockPanTiltAdapter
+from luma.controllers.p_controller import DeadZonePController, PController
+from luma.controllers.smooth import SmoothController
+from luma.detectors.color import ColorDetector
+from luma.metrics import MetricsRecorder
+from luma.models import Target
+from luma.pipeline import LumaPipeline
 
 
 class TestPController:
-    def _make_detection(self, ex: float, ey: float, visible: bool = True) -> Detection:
-        return Detection(ex=ex, ey=ey, visible=visible)
+    def _make_detection(self, ex: float, ey: float, visible: bool = True) -> Target:
+        return Target(ex=ex, ey=ey, visible=visible)
 
     def test_target_at_center_no_command(self):
-        cfg = ControllerConfig()
-        pt = PanTiltConfig()
-        ctrl = PController(cfg, pt)
+        ctrl = PController()
         det = self._make_detection(0.0, 0.0)
         cmd = ctrl.compute(det, None)
         assert cmd.yaw == 0.0
         assert cmd.pitch == 0.0
 
     def test_target_on_left_positive_yaw(self):
-        cfg = ControllerConfig(yaw_gain=10.0)
-        pt = PanTiltConfig()
-        ctrl = PController(cfg, pt)
+        ctrl = PController(kp=10.0)
         det = self._make_detection(-1.0, 0.0)
         cmd = ctrl.compute(det, None)
         assert cmd.yaw > 0  # 目标在左，需要向右转
 
     def test_target_on_right_negative_yaw(self):
-        cfg = ControllerConfig(yaw_gain=10.0)
-        pt = PanTiltConfig()
-        ctrl = PController(cfg, pt)
+        ctrl = PController(kp=10.0)
         det = self._make_detection(1.0, 0.0)
         cmd = ctrl.compute(det, None)
         assert cmd.yaw < 0
 
     def test_command_limit(self):
-        cfg = ControllerConfig(yaw_gain=20.0, max_single_cmd_yaw=3.0)
-        pt = PanTiltConfig()
-        ctrl = PController(cfg, pt)
+        ctrl = PController(kp=20.0, max_output=3.0)
         det = self._make_detection(-1.0, 0.0)
         cmd = ctrl.compute(det, None)
         assert abs(cmd.yaw) <= 3.0
 
     def test_target_lost_returns_zero(self):
-        cfg = ControllerConfig(yaw_gain=10.0)
-        pt = PanTiltConfig()
-        ctrl = PController(cfg, pt)
+        ctrl = PController(kp=10.0)
         det = self._make_detection(0.0, 0.0, visible=False)
         cmd = ctrl.compute(det, None)
         assert cmd.yaw == 0.0
@@ -71,34 +51,28 @@ class TestPController:
 
 
 class TestDeadZonePController:
-    def _make_detection(self, ex: float, ey: float, visible: bool = True) -> Detection:
-        return Detection(ex=ex, ey=ey, visible=visible)
+    def _make_detection(self, ex: float, ey: float, visible: bool = True) -> Target:
+        return Target(ex=ex, ey=ey, visible=visible)
 
     def test_in_dead_zone_no_command(self):
-        cfg = ControllerConfig(dead_zone=0.1, yaw_gain=10.0)
-        pt = PanTiltConfig()
-        ctrl = DeadZonePController(cfg, pt)
+        ctrl = DeadZonePController(kp=10.0, dead_zone=0.1)
         det = self._make_detection(0.05, 0.0)
         cmd = ctrl.compute(det, None)
         assert cmd.yaw == 0.0
 
     def test_outside_dead_zone_command(self):
-        cfg = ControllerConfig(dead_zone=0.05, yaw_gain=10.0)
-        pt = PanTiltConfig()
-        ctrl = DeadZonePController(cfg, pt)
+        ctrl = DeadZonePController(kp=10.0, dead_zone=0.05)
         det = self._make_detection(-0.2, 0.0)
         cmd = ctrl.compute(det, None)
         assert cmd.yaw != 0.0
 
 
-class TestEMAFilteredPController:
-    def _make_detection(self, ex: float, ey: float, visible: bool = True) -> Detection:
-        return Detection(ex=ex, ey=ey, visible=visible)
+class TestSmoothController:
+    def _make_detection(self, ex: float, ey: float, visible: bool = True) -> Target:
+        return Target(ex=ex, ey=ey, visible=visible)
 
     def test_ama_smooths_output(self):
-        cfg = ControllerConfig(yaw_gain=10.0, ema_alpha=0.3)
-        pt = PanTiltConfig()
-        ctrl = EMAFilteredPController(cfg, pt)
+        ctrl = SmoothController(controller=PController(kp=10.0), alpha=0.3)
 
         # 连续输入突变值
         det1 = self._make_detection(-1.0, 0.0)
@@ -111,7 +85,7 @@ class TestEMAFilteredPController:
         assert abs(cmd2.yaw) < abs(cmd1.yaw) * 2  # 不会突变
 
 
-class TestServoPipeline:
+class TestLumaPipeline:
     def _make_frame_with_target(self, x: int, y: int) -> np.ndarray:
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         x1 = max(0, x - 20)
@@ -126,12 +100,10 @@ class TestServoPipeline:
 
     def test_tracking_center(self):
         detector = ColorDetector(lower_v=50)
-        cfg = ControllerConfig()
-        pt = PanTiltConfig()
-        ctrl = PController(cfg, pt)
+        ctrl = PController()
         adapter = MockPanTiltAdapter()
         metrics = MetricsRecorder()
-        pipeline = ServoPipeline(detector, ctrl, adapter, metrics)
+        pipeline = LumaPipeline(detector, ctrl, adapter, metrics)
 
         frame = self._make_frame_with_target(320, 240)
         cmd = pipeline.step(frame)
@@ -139,12 +111,10 @@ class TestServoPipeline:
 
     def test_tracking_left(self):
         detector = ColorDetector(lower_v=50)
-        cfg = ControllerConfig(yaw_gain=5.0)
-        pt = PanTiltConfig()
-        ctrl = PController(cfg, pt)
+        ctrl = PController(kp=5.0)
         adapter = MockPanTiltAdapter()
         metrics = MetricsRecorder()
-        pipeline = ServoPipeline(detector, ctrl, adapter, metrics)
+        pipeline = LumaPipeline(detector, ctrl, adapter, metrics)
 
         frame = self._make_frame_with_target(100, 240)
         cmd = pipeline.step(frame)
@@ -152,15 +122,16 @@ class TestServoPipeline:
 
     def test_target_lost(self):
         detector = ColorDetector(lower_v=50)
-        cfg = ControllerConfig()
-        pt = PanTiltConfig()
-        ctrl = PController(cfg, pt)
+        ctrl = PController()
         adapter = MockPanTiltAdapter()
         metrics = MetricsRecorder()
-        # short=0.5s 表示半秒内仍视为短暂丢失，long=0.0 直接进入 LOST
-        pipeline = ServoPipeline(
-            detector, ctrl, adapter, metrics,
-            LostConfig(short_lost_timeout=0.5, long_lost_timeout=0.0),
+        # A zero loss timeout sends a stop command on the first missing frame.
+        pipeline = LumaPipeline(
+            detector,
+            ctrl,
+            adapter,
+            metrics,
+            lost_timeout=0.0,
         )
 
         # 先检测目标
@@ -174,15 +145,13 @@ class TestServoPipeline:
         assert metrics.lost_count >= 1
 
     def test_command_within_safe_range(self):
-        cfg = ControllerConfig(yaw_gain=50.0, max_single_cmd_yaw=2.0)
-        pt = PanTiltConfig(max_yaw=30.0)
-        ctrl = PController(cfg, pt)
+        ctrl = PController(kp=50.0, max_output=2.0, max_yaw=30.0)
         adapter = MockPanTiltAdapter()
         metrics = MetricsRecorder()
         detector = ColorDetector(lower_v=50)
-        pipeline = ServoPipeline(detector, ctrl, adapter, metrics)
+        pipeline = LumaPipeline(detector, ctrl, adapter, metrics)
 
         frame = self._make_frame_with_target(0, 240)  # 极端位置
         cmd = pipeline.step(frame)
         assert abs(cmd.yaw) <= 2.0  # 不超过限幅
-        assert abs(cmd.yaw) <= pt.max_yaw
+        assert abs(cmd.yaw) <= 30.0

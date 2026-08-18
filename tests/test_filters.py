@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from visual_servo_lite.filters import EMAFilter
+from luma.filters import EMAFilter
 
 
 class TestEMAFilter:

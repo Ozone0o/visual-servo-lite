@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- Luma ROS 2 integration package. -->
+<package format="3">
+  <name>luma_ros2_node</name>
+  <version>0.2.0</version>
+  <description>ROS 2 image subscriber and motion publisher for Luma.</description>
+  <maintainer email="maintainers@luma.dev">Luma contributors</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>cv_bridge</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <exec_depend>luma</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

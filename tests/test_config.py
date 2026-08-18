@@ -1,11 +1,8 @@
-"""测试配置模块."""
+"""Tests for Luma configuration loading and component construction."""
 
 from __future__ import annotations
 
-import pytest
-
-from visual_servo_lite.config import build_configs, load_config
-from visual_servo_lite.models import ControllerConfig, LostConfig, PanTiltConfig
+from luma.config import build_components, load_config
 
 
 class TestLoadConfig:
@@ -14,20 +11,20 @@ class TestLoadConfig:
         assert cfg["controller"]["yaw_gain"] == 1.0
         assert cfg["controller"]["dead_zone"] == 0.05
 
-    def test_build_configs_returns_tuple(self):
+    def test_build_components_returns_runtime_plugins(self):
         cfg = load_config(None)
-        pt, ctl, lost = build_configs(cfg)
-        assert isinstance(pt, PanTiltConfig)
-        assert isinstance(ctl, ControllerConfig)
-        assert isinstance(lost, LostConfig)
+        detector, controller, adapter = build_components(cfg)
+        assert detector is not None
+        assert controller is not None
+        assert adapter is not None
 
     def test_custom_config_values(self, tmp_path):
         yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text(
-            "controller:\n  yaw_gain: 2.0\n  dead_zone: 0.1\n",
+            "controller:\n  name: p\n  kp: 2.0\n  dead_zone: 0.1\n",
             encoding="utf-8",
         )
         cfg = load_config(yaml_file)
-        pt, ctl, lost = build_configs(cfg)
-        assert ctl.yaw_gain == 2.0
-        assert ctl.dead_zone == 0.1
+        detector, controller, adapter = build_components(cfg)
+        assert controller.kp_x == 2.0
+        assert controller.dead_zone == 0.1

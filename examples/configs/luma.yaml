@@ -1,4 +1,4 @@
-# Luma configuration example.
+# Luma configuration: Camera → Detector → Controller → Robot Adapter
 
 detector:
   name: color

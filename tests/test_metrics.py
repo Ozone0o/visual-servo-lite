@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from visual_servo_lite.metrics import MetricsRecorder
-from visual_servo_lite.models import Command, Detection
+from luma.metrics import MetricsRecorder
+from luma.models import MotionCommand, Target
 
 
 class TestMetricsRecorder:
@@ -15,8 +15,8 @@ class TestMetricsRecorder:
 
     def test_record_visible_target(self):
         recorder = MetricsRecorder()
-        det = Detection(ex=0.1, ey=0.2, visible=True)
-        cmd = Command(yaw=1.0, pitch=2.0)
+        det = Target(ex=0.1, ey=0.2, visible=True)
+        cmd = MotionCommand(yaw=1.0, pitch=2.0)
         recorder.record(det, cmd)
 
         assert recorder.lost_count == 0
@@ -25,8 +25,8 @@ class TestMetricsRecorder:
 
     def test_record_lost_target(self):
         recorder = MetricsRecorder()
-        det = Detection(visible=False)
-        cmd = Command()
+        det = Target(visible=False)
+        cmd = MotionCommand()
         recorder.record(det, cmd)
 
         assert recorder.lost_count == 1
@@ -35,8 +35,8 @@ class TestMetricsRecorder:
     def test_mean_tracking_error(self):
         recorder = MetricsRecorder()
         for _ in range(10):
-            det = Detection(ex=0.1, ey=0.2, visible=True)
-            cmd = Command()
+            det = Target(ex=0.1, ey=0.2, visible=True)
+            cmd = MotionCommand()
             recorder.record(det, cmd)
 
         expected = (0.1**2 + 0.2**2) ** 0.5
@@ -44,8 +44,8 @@ class TestMetricsRecorder:
 
     def test_csv_save(self, tmp_path):
         recorder = MetricsRecorder(output_path=tmp_path / "test.csv")
-        det = Detection(ex=0.1, ey=0.1, visible=True)
-        cmd = Command(yaw=1.0, pitch=0.0)
+        det = Target(ex=0.1, ey=0.1, visible=True)
+        cmd = MotionCommand(yaw=1.0, pitch=0.0)
         recorder.record(det, cmd)
         recorder.save_csv()
 
@@ -54,8 +54,8 @@ class TestMetricsRecorder:
 
     def test_summary_dict(self):
         recorder = MetricsRecorder()
-        det = Detection(ex=0.05, ey=0.05, visible=True)
-        cmd = Command()
+        det = Target(ex=0.05, ey=0.05, visible=True)
+        cmd = MotionCommand()
         recorder.record(det, cmd)
 
         summary = recorder.get_summary()

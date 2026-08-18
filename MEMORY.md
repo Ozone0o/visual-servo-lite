@@ -1,12 +1,13 @@
 ---
-name: visual-servo-lite - project overview
-description: 轻量级二维视觉伺服项目，面向 pan-tilt 云台，解耦 detector/controller/adapter
+name: Luma - project overview
+description: Lightweight visual intelligence and servo control SDK for robots
 type: project
 ---
 
-- 项目名 visual-servo-lite：二维云台/机器人头自动视觉跟踪
-- 核心设计：Detector → Controller → OutputAdapter 完全解耦
-- 默认 Color Detector（OpenCV），可选 YOLO 插件
-- Controller 支持 P / P+DeadZone / P+EMA，预留 PID/Kalman
-- ROS2 Node 仅负责消息转换，核心算法可独立测试
-- Metrics 导出 CSV，记录 tracking error / lost count / visible ratio
+- 项目名 Luma：Give robots eyes and motion
+- 核心设计：Camera → Detector → Controller → Robot Adapter
+- Detector 插件：Color / AprilTag / YOLO / Custom，统一返回 Target
+- Controller 支持 P / PID / Smooth，输入 TrackingError，输出 MotionCommand
+- Adapter 支持 Mock / PanTilt / ROS2 / Custom，核心算法独立于硬件
+- Metrics 导出 CSV/JSON；Simulation mode 可验证闭环误差收敛
+- Luma is the sole public package and command surface

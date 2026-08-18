@@ -9,14 +9,14 @@
 
 from __future__ import annotations
 
+import cv2
 import numpy as np
 
-import cv2
-from visual_servo_lite.adapters.mock import MockPanTiltAdapter
-from visual_servo_lite.controllers.base import BaseController
-from visual_servo_lite.detectors.color import ColorDetector
-from visual_servo_lite.models import Command, Detection
-from visual_servo_lite.pipeline import ServoPipeline
+from luma.adapters.mock import MockPanTiltAdapter
+from luma.controllers.base import BaseController
+from luma.detectors.color import ColorDetector
+from luma.models import MotionCommand, Target
+from luma.pipeline import LumaPipeline
 
 
 class SimplePController(BaseController):
@@ -25,8 +25,8 @@ class SimplePController(BaseController):
     def __init__(self, kp: float = 1.0) -> None:
         self.kp = kp
 
-    def compute(self, detection: Detection, last_command: Command | None) -> Command:
-        return Command(yaw=detection.ex * self.kp, pitch=detection.ey * self.kp)
+    def compute(self, detection: Target, last_command: MotionCommand | None) -> MotionCommand:
+        return MotionCommand(yaw=detection.ex * self.kp, pitch=detection.ey * self.kp)
 
 
 def create_demo_image(width: int = 640, height: int = 480) -> np.ndarray:
@@ -52,7 +52,7 @@ def main() -> None:
     adapter = MockPanTiltAdapter()
 
     # 创建管线
-    pipeline = ServoPipeline(detector=detector, controller=controller, adapter=adapter)
+    pipeline = LumaPipeline(detector=detector, controller=controller, adapter=adapter)
 
     # 运行 3 步
     print("目标位置: x=320, y=240")

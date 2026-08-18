@@ -1,2 +1,0 @@
-[console_scripts]
-visual-servo-mock = visual_servo_lite.cli:main_mock
