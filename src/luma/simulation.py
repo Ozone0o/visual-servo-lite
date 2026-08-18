@@ -6,8 +6,12 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-import cv2
 import numpy as np
+
+try:
+    import cv2
+except ImportError:  # pragma: no cover - depends on the installation extra
+    cv2 = None
 
 from luma.adapters.mock import MockAdapter
 from luma.controllers.p_controller import PController
@@ -54,6 +58,10 @@ class SimulatedCamera:
         self.radius = radius
 
     def read(self) -> np.ndarray:
+        if cv2 is None:
+            raise ImportError(
+                "Luma simulation requires OpenCV; install with: pip install luma[vision]"
+            )
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
         x = int(round(self.width / 2 + self.state.error_x * self.width / 2))
         y = int(round(self.height / 2 + self.state.error_y * self.height / 2))

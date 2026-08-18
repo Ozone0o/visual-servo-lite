@@ -33,5 +33,5 @@ jobs:
         run: |
           python -m build
           python -m venv /tmp/luma-wheel-smoke
-          /tmp/luma-wheel-smoke/bin/pip install --no-deps dist/luma-*.whl
+          /tmp/luma-wheel-smoke/bin/pip install dist/luma-*.whl
           /tmp/luma-wheel-smoke/bin/luma --help
